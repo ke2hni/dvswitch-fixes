@@ -146,7 +146,7 @@ No changes to `Analog_Bridge.ini`, `proxy.js`, or `pcm-player.min.js` were requi
 `dvswitch.sh` confirmed version:
 
 ```text
-1.6.3-12
+1.6.4
 ```
 
 The script replaces unreliable or outdated database downloads with validated sources for the supported network data. It checks downloaded content before replacing the working file and preserves the existing database when a download is empty, invalid, HTML, or otherwise unusable.
