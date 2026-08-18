@@ -55,6 +55,11 @@ Invalid YSF reflector id/name - "4444"
 DVSwitch YSF PTT but no audio
 YSF works by IP address but not reflector number
 DVSwitch dashboard YSF master null
+P25 tune sets Tx TG/Ref but P25 Net remains Not Linked
+P25 reflector only connects after pressing PTT
+P25 five digit reflector 10400 becomes 400
+P25 TalkGroup missing space
+P25 linked announcement starts during PTT
 ```
 
 Root cause on the tested ARM64 build:
@@ -65,6 +70,37 @@ Correct command: LinkYSF 44444
 ```
 
 The missing separator caused YSFGateway to parse the reflector number incorrectly. The patched ARM64 `MMDVM_Bridge` binary sends the correct command.
+
+### P25 tune does not connect until PTT
+
+Common symptoms:
+
+```text
+DVSwitch P25 tune does not connect
+P25 Net remains Not Linked after dvswitch.sh tune
+Analog Bridge shows Tx TG/Ref but P25Gateway is unlinked
+P25 only connects after pressing PTT
+P25 five digit reflector number loses first digit
+tune 10400 connects to reflector 400
+TalkGroup10201 missing separator
+P25 linked announcement clipped after PTT
+```
+
+Root cause on the tested ARM64 build:
+
+```text
+Broken command: TalkGroup10201
+Correct command: TalkGroup 10201
+```
+
+`dvswitch.sh tune` correctly passed `txTg=10201` through Analog_Bridge, but the installed MMDVM_Bridge binary emitted the remote command without the separator expected by P25Gateway. P25Gateway consequently parsed five-digit targets one digit short. For example, `10400` became `400`; `10201` became `201` and caused an unlink when reflector 201 was unavailable.
+
+PTT appeared to repair the connection because the P25 voice frames carry the complete numeric talkgroup and bypass the malformed text command. This also caused the queued “Linked to…” prompt to start at the end of the triggering PTT, clipping the beginning of the announcement.
+
+The patched ARM64 `MMDVM_Bridge` binary sends the corrected command with a space. Live testing confirmed that `dvswitch.sh tune 10200` and `dvswitch.sh tune 10201` linked immediately by remote command and updated both the Analog Bridge and P25 Net dashboard boxes without PTT or a page refresh.
+
+> [!NOTE]
+> The direct P25 linking defect is fixed. A separate P25Gateway voice-prompt timing issue remains: this P25Gateway build queues the spoken link prompt until it receives a P25 end-of-transmission frame. The dashboard and network link update immediately, but the HT may remain silent until the first PTT and then hear a clipped announcement. Correcting that separate behavior requires a P25Gateway source change, not another MMDVM_Bridge format-string patch.
 
 ### P25 connected but dashboard says Unlinked
 
@@ -131,7 +167,7 @@ No changes to `Analog_Bridge.ini`, `proxy.js`, or `pcm-player.min.js` were requi
 | Repository file | Installed path | Purpose |
 | --- | --- | --- |
 | `dvswitch.sh` | `/opt/MMDVM_Bridge/dvswitch.sh` | Reliable, validated network database updates |
-| `MMDVM_Bridge` | `/opt/MMDVM_Bridge/MMDVM_Bridge` | ARM64 five-digit YSF tuning repair |
+| `MMDVM_Bridge` | `/opt/MMDVM_Bridge/MMDVM_Bridge` | ARM64 five-digit YSF and P25 remote-tuning repairs |
 | `P25Gateway.ini` | `/opt/P25Gateway/P25Gateway.ini` | Configuration aligned with the installed P25Gateway binary |
 | `YSFGateway.ini` | `/opt/YSFGateway/YSFGateway.ini` | Configuration aligned with YSFGateway 20211108 |
 | `functions.php` | `/usr/share/dvswitch/include/functions.php` | P25 link-status parsing and log filtering |
@@ -173,7 +209,7 @@ TGList_TGIF.txt missing
 DVSwitch database download returned HTML
 ```
 
-### 2. ARM64 MMDVM_Bridge five-digit YSF fix
+### 2. ARM64 MMDVM_Bridge five-digit YSF and P25 fixes
 
 The included binary is for **64-bit ARM/AArch64 only**.
 
@@ -189,10 +225,36 @@ For YSF reflector `44444`, this produces:
 LinkYSF 44444
 ```
 
-Confirmed binary SHA-256:
+Embedded corrected P25 remote-command format:
 
 ```text
-9844cf4fc073a961efe23000b1d994d4f85ef006b4abd1d0f07109d1e4fc3ebe
+REMOTE@%s:%d!TalkGroup %d
+```
+
+For P25 reflector `10201`, this produces:
+
+```text
+TalkGroup 10201
+```
+
+Runtime verification on node68425:
+
+```text
+Switched to reflector 10200 by remote command
+Unlinked from reflector 10200 by remote command
+Switched to reflector 10201 by remote command
+```
+
+Both the Analog Bridge `Tx TG/Ref` field and the P25 Net box updated immediately without PTT or a browser refresh.
+
+> [!IMPORTANT]
+> The earlier ARM64 checksum `9844cf4f...fc3ebe` applies to the YSF-only patched binary and must not be used for the new combined YSF+P25 binary.
+
+Confirmed combined ARM64 binary checksum and size:
+
+```text
+SHA-256: 4da157f00c38a71bdcb6c192d3f86d8a352860fc1c9abb201c58fe24e554eb19
+Size:    7084608 bytes
 ```
 
 Tested with:
@@ -357,7 +419,7 @@ It also ensures `Switched` messages reach the P25 dashboard parser. This allows 
 
 ## ✅ Compatibility
 
-The complete repair set was tested on:
+The complete repair set, including the combined ARM64 YSF and P25 binary fixes, was tested on:
 
 ```text
 Raspberry Pi 5
@@ -412,7 +474,7 @@ sudo install -m 755 dvswitch.sh /opt/MMDVM_Bridge/dvswitch.sh && bash -n /opt/MM
 Confirm that the system reports `aarch64`, verify the checksum, stop MMDVM_Bridge, install the binary, and restart the service:
 
 ```bash
-test "$(uname -m)" = "aarch64" && echo "Architecture OK: aarch64" || { echo "ERROR: This binary requires aarch64"; exit 1; }; echo '9844cf4fc073a961efe23000b1d994d4f85ef006b4abd1d0f07109d1e4fc3ebe  MMDVM_Bridge' | sha256sum -c - && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
+test "$(uname -m)" = "aarch64" && echo "Architecture OK: aarch64" || { echo "ERROR: This binary requires aarch64"; exit 1; }; echo '4da157f00c38a71bdcb6c192d3f86d8a352860fc1c9abb201c58fe24e554eb19  MMDVM_Bridge' | sha256sum -c - && test "$(stat -c %s MMDVM_Bridge)" = "7084608" && echo "Size OK: 7084608 bytes" && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
 ```
 
 ### Install the dashboard PHP repairs
@@ -491,6 +553,20 @@ The corrected binary contains a space before `%05d`:
 strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!Link%c%c%c %05d'
 ```
 
+### Verify the repaired P25 command
+
+The corrected ARM64 binary contains a space before the P25 talkgroup formatter:
+
+```bash
+strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!TalkGroup %d'
+```
+
+Confirm that the broken no-space format is absent:
+
+```bash
+strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!TalkGroup%d' && echo 'ERROR: broken P25 format still present' || echo 'Broken P25 format not present'
+```
+
 ### Verify PHP syntax and repair markers
 
 ```bash
@@ -512,6 +588,24 @@ sudo /opt/MMDVM_Bridge/dvswitch.sh tune 44444; sleep 3; sudo tail -n 40 "$(ls -1
 ```
 
 The log should show a valid link attempt for all five digits, not a truncated four-digit number.
+
+### Verify five-digit P25 remote tuning
+
+Select P25 mode, tune two known five-digit reflectors without pressing PTT, and inspect the P25Gateway log:
+
+```bash
+sudo /opt/MMDVM_Bridge/dvswitch.sh mode p25; sleep 2; sudo /opt/MMDVM_Bridge/dvswitch.sh tune 10200; sleep 3; sudo /opt/MMDVM_Bridge/dvswitch.sh tune 10201; sleep 3; sudo tail -n 20 "$(ls -1t /var/log/mmdvm/P25Gateway-*.log | head -n 1)"
+```
+
+Expected messages include:
+
+```text
+Switched to reflector 10200 by remote command
+Unlinked from reflector 10200 by remote command
+Switched to reflector 10201 by remote command
+```
+
+The P25 Net box should update without PTT or a page refresh. Do not use the spoken prompt alone as the link test because the separate P25Gateway prompt-start issue described above is not yet fixed.
 
 ### Verify RX Monitor packet timing
 
