@@ -31,7 +31,7 @@ RX Monitor button green but no browser audio
 Gateway INI files containing obsolete or unsupported settings
 ```
 
-Each repair was tested incrementally on the live node before being marked working. The seven installed files in this repository are the **core functional repair set**; the P25 source patch should be published alongside them for review and rebuilding. Responsive-layout and dark-mode projects are intentionally maintained separately.
+Each repair was tested incrementally on the live node before being marked working. The seven installed files in this repository are the **core functional repair set**. Responsive-layout and dark-mode projects are intentionally maintained separately.
 
 > [!IMPORTANT]
 > These files are not a universal blind-replacement package. Read the compatibility and installation notes for each file. Always create backups first.
@@ -175,44 +175,6 @@ No changes to `Analog_Bridge.ini`, `proxy.js`, or `pcm-player.min.js` were requi
 | `functions.php` | `/usr/share/dvswitch/include/functions.php` | P25 link-status parsing and log filtering |
 | `status.php` | `/usr/share/dvswitch/include/status.php` | YSF null fix, Tx TG/Ref label, and D-Star reflector display |
 
-Developers may optionally publish `p25gateway-immediate-voice-800ms.patch` for source review or rebuilding; ordinary users only need the ready-to-install `P25Gateway` binary.
-
-### GitHub publication checklist
-
-Publish these core files:
-
-```text
-README.md
-dvswitch.sh
-MMDVM_Bridge
-P25Gateway
-P25Gateway.ini
-YSFGateway.ini
-functions.php
-status.php
-```
-
-These optional, currently live-test-pending architecture files may remain in the repository if clearly labeled experimental:
-
-```text
-MMDVM_Bridge.armhf.ysf5-fixed
-MMDVM_Bridge.amd64.ysf5-fixed
-```
-
-Do **not** publish the rollback binaries (`P25Gateway.before-p25voice1` or `P25Gateway.p25voice1`) as fixes. The first is the unmodified package binary and the second is an incomplete test build without sufficient transmitted lead-in.
-
-On node68425, create the correctly named final P25 replacement with:
-
-```bash
-sudo install -o asl -g asl -m 755 /opt/P25Gateway/P25Gateway /home/asl/P25Gateway && /home/asl/P25Gateway -v && sha256sum /home/asl/P25Gateway && file /home/asl/P25Gateway && stat -c '%n %s bytes mode %a' /home/asl/P25Gateway
-```
-
-Before uploading, the first checksum must be exactly:
-
-```text
-512c84ac62405f7b6e641c2c03b0b0a549d98ce4ce40896a089658505d497388  /home/asl/P25Gateway
-```
-
 ---
 
 ## ✨ Fix Details
@@ -352,7 +314,7 @@ Live verification on node68425:
 * The original package binary and the first test build were retained as rollback files.
 
 > [!WARNING]
-> This replacement is intentionally restricted to the exact original build tested above. A matching `-v` output alone is not enough: package rebuilds can share the same internal version while containing different downstream code. If the original SHA-256 or size does not match, stop and build the source patch against that exact package instead of forcing this binary onto the node.
+> This replacement is intentionally restricted to the exact original build tested above. A matching `-v` output alone is not enough: package rebuilds can share the same internal version while containing different downstream code. If the original SHA-256 or size does not match, do not install this binary.
 
 ### 2B. Optional ARMHF and AMD64 YSF five-digit compatibility binaries
 
@@ -548,7 +510,7 @@ backup_dir="/root/dvswitch-fix-backup-$(date +%Y%m%d-%H%M%S)"; sudo mkdir -p "$b
 
 ## 📥 Installation
 
-You can follow the following instructions, but if you know what you're doing, I suggest manually backing up each file and then replacing it with the patched file - Don't forget to make sure the replacement file has the same permissons as the original file. After replacing the files I suggest a reboot.  DON'T forget to replace the required information int the ".ini" files if you replace your old ones.
+Back up every original before replacement. Preserve the node-specific values in both `.ini` files, and keep each replacement's required ownership and permissions. Install and test one component at a time.
 
 Clone the repository and enter its directory:
 
