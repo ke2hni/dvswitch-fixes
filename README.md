@@ -31,7 +31,7 @@ RX Monitor button green but no browser audio
 Gateway INI files containing obsolete or unsupported settings
 ```
 
-Each repair was tested incrementally on the live node before being marked working. The six files in this repository are the **core functional repair set**. Responsive-layout and dark-mode projects are intentionally maintained separately.
+Each repair was tested incrementally on the live node before being marked working. The seven installed files in this repository are the **core functional repair set**; the P25 source patch should be published alongside them for review and rebuilding. Responsive-layout and dark-mode projects are intentionally maintained separately.
 
 > [!IMPORTANT]
 > These files are not a universal blind-replacement package. Read the compatibility and installation notes for each file. Always create backups first.
@@ -60,6 +60,8 @@ P25 reflector only connects after pressing PTT
 P25 five digit reflector 10400 becomes 400
 P25 TalkGroup missing space
 P25 linked announcement starts during PTT
+P25 linked announcement clipped or missing "Linked to"
+P25 announcement waits for PTT release
 ```
 
 Root cause on the tested ARM64 build:
@@ -99,8 +101,7 @@ PTT appeared to repair the connection because the P25 voice frames carry the com
 
 The patched ARM64 `MMDVM_Bridge` binary sends the corrected command with a space. Live testing confirmed that `dvswitch.sh tune 10200` and `dvswitch.sh tune 10201` linked immediately by remote command and updated both the Analog Bridge and P25 Net dashboard boxes without PTT or a page refresh.
 
-> [!NOTE]
-> The direct P25 linking defect is fixed. A separate P25Gateway voice-prompt timing issue remains: this P25Gateway build queues the spoken link prompt until it receives a P25 end-of-transmission frame. The dashboard and network link update immediately, but the HT may remain silent until the first PTT and then hear a clipped announcement. Correcting that separate behavior requires a P25Gateway source change, not another MMDVM_Bridge format-string patch.
+The separate P25Gateway voice-prompt problem is also fixed in this repository. The patched gateway starts a remotely queued announcement immediately and transmits an 800 ms silent P25 lead-in before speech. This gives MMDVM_Bridge, the node transmitter, and the receiving HT time to open before “Linked to” begins. Three reflector changes and live incoming P25 traffic were confirmed without PTT.
 
 ### P25 connected but dashboard says Unlinked
 
@@ -168,10 +169,49 @@ No changes to `Analog_Bridge.ini`, `proxy.js`, or `pcm-player.min.js` were requi
 | --- | --- | --- |
 | `dvswitch.sh` | `/opt/MMDVM_Bridge/dvswitch.sh` | Reliable, validated network database updates |
 | `MMDVM_Bridge` | `/opt/MMDVM_Bridge/MMDVM_Bridge` | ARM64 five-digit YSF and P25 remote-tuning repairs |
+| `P25Gateway` | `/opt/P25Gateway/P25Gateway` | ARM64 immediate P25 announcement and 800 ms transmitted lead-in |
 | `P25Gateway.ini` | `/opt/P25Gateway/P25Gateway.ini` | Configuration aligned with the installed P25Gateway binary |
 | `YSFGateway.ini` | `/opt/YSFGateway/YSFGateway.ini` | Configuration aligned with YSFGateway 20211108 |
 | `functions.php` | `/usr/share/dvswitch/include/functions.php` | P25 link-status parsing and log filtering |
 | `status.php` | `/usr/share/dvswitch/include/status.php` | YSF null fix, Tx TG/Ref label, and D-Star reflector display |
+
+Developers may optionally publish `p25gateway-immediate-voice-800ms.patch` for source review or rebuilding; ordinary users only need the ready-to-install `P25Gateway` binary.
+
+### GitHub publication checklist
+
+Publish these core files:
+
+```text
+README.md
+dvswitch.sh
+MMDVM_Bridge
+P25Gateway
+P25Gateway.ini
+YSFGateway.ini
+functions.php
+status.php
+```
+
+These optional, currently live-test-pending architecture files may remain in the repository if clearly labeled experimental:
+
+```text
+MMDVM_Bridge.armhf.ysf5-fixed
+MMDVM_Bridge.amd64.ysf5-fixed
+```
+
+Do **not** publish the rollback binaries (`P25Gateway.before-p25voice1` or `P25Gateway.p25voice1`) as fixes. The first is the unmodified package binary and the second is an incomplete test build without sufficient transmitted lead-in.
+
+On node68425, create the correctly named final P25 replacement with:
+
+```bash
+sudo install -o asl -g asl -m 755 /opt/P25Gateway/P25Gateway /home/asl/P25Gateway && /home/asl/P25Gateway -v && sha256sum /home/asl/P25Gateway && file /home/asl/P25Gateway && stat -c '%n %s bytes mode %a' /home/asl/P25Gateway
+```
+
+Before uploading, the first checksum must be exactly:
+
+```text
+512c84ac62405f7b6e641c2c03b0b0a549d98ce4ce40896a089658505d497388  /home/asl/P25Gateway
+```
 
 ---
 
@@ -268,7 +308,53 @@ YSFGateway version 20211108 git #8946594
 > [!CAUTION]
 > Do not install this binary on AMD64/x86-64, ARMHF/32-bit ARM, or an unverified MMDVM_Bridge version.
 
-### 2A. Optional ARMHF and AMD64 YSF five-digit compatibility binaries
+### 2A. ARM64 P25Gateway immediate-announcement fix
+
+The tested stock gateway queued `voice->linkedTo(currentTG)` after a remote tune but did not start the prompt. It waited for the first local P25 end-of-transmission frame, so the first PTT release started the announcement while the HT was still returning to receive.
+
+The source repair adds:
+
+```cpp
+voice->eof();
+```
+
+immediately after the remote-command link/unlink prompt is assembled. Runtime testing proved that this starts the announcement without PTT. A second timing problem then became visible: the stock prompt contained only four 20 ms transmitted-silence frames before speech—80 ms—so the RF path clipped “Linked to.” The final build uses:
+
+```cpp
+const unsigned int LEADING_SILENCE_LENGTH = 40U;  // 800 ms
+const unsigned int TRAILING_SILENCE_LENGTH = 4U; // 80 ms
+```
+
+Confirmed original binary on node68425:
+
+```text
+Version:  P25Gateway version 20201105
+Package:  p25gateway 20240701-32 arm64
+SHA-256:  51b1b2ed197d6be35c425a87e35b84fcbf765a4151739b2afd1523bb29334e7b
+Size:     1427320 bytes
+```
+
+Confirmed final patched binary:
+
+```text
+Repository filename: P25Gateway
+Installed filename:  /opt/P25Gateway/P25Gateway
+Version:             P25Gateway version 20201105-p25voice2
+SHA-256:             512c84ac62405f7b6e641c2c03b0b0a549d98ce4ce40896a089658505d497388
+Architecture:        ARM AArch64 / Debian arm64
+```
+
+Live verification on node68425:
+
+* Three different reflector changes announced “Linked to #####” completely without PTT.
+* Incoming conversation audio began automatically on a busy reflector without PTT.
+* The P25 Net dashboard box and Analog Bridge target updated immediately.
+* The original package binary and the first test build were retained as rollback files.
+
+> [!WARNING]
+> This replacement is intentionally restricted to the exact original build tested above. A matching `-v` output alone is not enough: package rebuilds can share the same internal version while containing different downstream code. If the original SHA-256 or size does not match, stop and build the source patch against that exact package instead of forcing this binary onto the node.
+
+### 2B. Optional ARMHF and AMD64 YSF five-digit compatibility binaries
 
 Two additional architecture-specific binaries are included for users experiencing the same YSF reflector-number truncation problem on 32-bit ARM or 64-bit x86 systems:
 
@@ -380,6 +466,16 @@ Please compare the attached original and patched binaries. Confirm their archite
 
 `P25Gateway.ini` was rewritten to match the configuration options supported by the installed P25Gateway binary. Obsolete or unsupported settings were removed while required operational settings were retained.
 
+The final tested persistence settings are:
+
+```ini
+Static=10200
+RFHangTime=0
+NetHangTime=0
+```
+
+This restores reflector 10200 after a gateway restart/reboot and prevents inactivity unlinking. Change `Static` to the desired local startup reflector. Confirm that it exists in `P25Hosts.txt` before restarting.
+
 > [!WARNING]
 > Gateway INI files contain node-specific values. Compare the supplied file with your existing configuration and preserve your callsign, IDs, addresses, ports, frequencies, location, and startup reflector.
 
@@ -442,10 +538,10 @@ Before installing, record your versions:
 
 ## 🛡️ Back Up Existing Files
 
-Create a dated backup directory and copy all six active files before replacing anything:
+Create a dated backup directory and copy all seven active files before replacing anything:
 
 ```bash
-backup_dir="/root/dvswitch-fix-backup-$(date +%Y%m%d-%H%M%S)"; sudo mkdir -p "$backup_dir/opt/MMDVM_Bridge" "$backup_dir/opt/YSFGateway" "$backup_dir/opt/P25Gateway" "$backup_dir/usr/share/dvswitch/include"; sudo cp -a /opt/MMDVM_Bridge/dvswitch.sh /opt/MMDVM_Bridge/MMDVM_Bridge "$backup_dir/opt/MMDVM_Bridge/"; sudo cp -a /opt/YSFGateway/YSFGateway.ini "$backup_dir/opt/YSFGateway/"; sudo cp -a /opt/P25Gateway/P25Gateway.ini "$backup_dir/opt/P25Gateway/"; sudo cp -a /usr/share/dvswitch/include/functions.php /usr/share/dvswitch/include/status.php "$backup_dir/usr/share/dvswitch/include/"; echo "Backup saved to $backup_dir"
+backup_dir="/root/dvswitch-fix-backup-$(date +%Y%m%d-%H%M%S)"; sudo mkdir -p "$backup_dir/opt/MMDVM_Bridge" "$backup_dir/opt/YSFGateway" "$backup_dir/opt/P25Gateway" "$backup_dir/usr/share/dvswitch/include"; sudo cp -a /opt/MMDVM_Bridge/dvswitch.sh /opt/MMDVM_Bridge/MMDVM_Bridge "$backup_dir/opt/MMDVM_Bridge/"; sudo cp -a /opt/YSFGateway/YSFGateway.ini "$backup_dir/opt/YSFGateway/"; sudo cp -a /opt/P25Gateway/P25Gateway /opt/P25Gateway/P25Gateway.ini "$backup_dir/opt/P25Gateway/"; sudo cp -a /usr/share/dvswitch/include/functions.php /usr/share/dvswitch/include/status.php "$backup_dir/usr/share/dvswitch/include/"; echo "Backup saved to $backup_dir"
 ```
 
 ---
@@ -476,6 +572,40 @@ Confirm that the system reports `aarch64`, verify the checksum, stop MMDVM_Bridg
 ```bash
 test "$(uname -m)" = "aarch64" && echo "Architecture OK: aarch64" || { echo "ERROR: This binary requires aarch64"; exit 1; }; echo '4da157f00c38a71bdcb6c192d3f86d8a352860fc1c9abb201c58fe24e554eb19  MMDVM_Bridge' | sha256sum -c - && test "$(stat -c %s MMDVM_Bridge)" = "7084608" && echo "Size OK: 7084608 bytes" && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
 ```
+
+### Install the patched ARM64 P25Gateway
+
+First record and compare the node's existing file. Installation is supported only when every value matches the tested original:
+
+```bash
+echo "=== ARCHITECTURE ==="; dpkg --print-architecture; uname -m; echo "=== VERSION AND PACKAGE ==="; /opt/P25Gateway/P25Gateway -v; dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' p25gateway; echo "=== ORIGINAL FILE ==="; sha256sum /opt/P25Gateway/P25Gateway; stat -c 'Size: %s bytes; Mode: %a; Owner: %U:%G' /opt/P25Gateway/P25Gateway
+```
+
+Required original result:
+
+```text
+Architecture: arm64 / aarch64
+Version:      P25Gateway version 20201105
+Package:      p25gateway 20240701-32 arm64
+SHA-256:      51b1b2ed197d6be35c425a87e35b84fcbf765a4151739b2afd1523bb29334e7b
+Size:         1427320 bytes
+```
+
+Verify that the GitHub download itself is the exact final file used on node68425:
+
+```bash
+echo '512c84ac62405f7b6e641c2c03b0b0a549d98ce4ce40896a089658505d497388  P25Gateway' | sha256sum -c - && file P25Gateway && ./P25Gateway -v
+```
+
+The result must report `OK`, an ARM AArch64 ELF executable, and `P25Gateway version 20201105-p25voice2`. If any check differs, stop.
+
+This guarded command refuses to replace an unexpected original, creates a dated backup, installs the patched file under the required runtime name, and verifies the running copy:
+
+```bash
+test "$(dpkg --print-architecture)" = "arm64" || { echo "ERROR: Debian architecture is not arm64"; exit 1; }; test "$(uname -m)" = "aarch64" || { echo "ERROR: Kernel architecture is not aarch64"; exit 1; }; test "$(/opt/P25Gateway/P25Gateway -v)" = "P25Gateway version 20201105" || { echo "ERROR: Original P25Gateway version differs"; exit 1; }; test "$(dpkg-query -W -f='${Version} ${Architecture}' p25gateway)" = "20240701-32 arm64" || { echo "ERROR: p25gateway package differs"; exit 1; }; echo '51b1b2ed197d6be35c425a87e35b84fcbf765a4151739b2afd1523bb29334e7b  /opt/P25Gateway/P25Gateway' | sha256sum -c - || { echo "ERROR: Original binary does not match node68425"; exit 1; }; test "$(stat -c %s /opt/P25Gateway/P25Gateway)" = "1427320" || { echo "ERROR: Original size differs"; exit 1; }; echo '512c84ac62405f7b6e641c2c03b0b0a549d98ce4ce40896a089658505d497388  P25Gateway' | sha256sum -c - || exit 1; backup="/opt/P25Gateway/P25Gateway.before-p25voice2-$(date +%Y%m%d-%H%M%S)"; sudo cp -a /opt/P25Gateway/P25Gateway "$backup" && sudo systemctl stop p25gateway.service && sudo install -o root -g root -m 755 P25Gateway /opt/P25Gateway/P25Gateway && sudo systemctl start p25gateway.service && sleep 3 && echo "Backup: $backup" && /opt/P25Gateway/P25Gateway -v && sha256sum /opt/P25Gateway/P25Gateway && sudo systemctl is-active p25gateway.service
+```
+
+After installation, the installed checksum must still be `512c84ac...7388`. Package upgrades may replace modified binaries, so recheck the version and checksum after upgrading `p25gateway`.
 
 ### Install the dashboard PHP repairs
 
@@ -605,7 +735,20 @@ Unlinked from reflector 10200 by remote command
 Switched to reflector 10201 by remote command
 ```
 
-The P25 Net box should update without PTT or a page refresh. Do not use the spoken prompt alone as the link test because the separate P25Gateway prompt-start issue described above is not yet fixed.
+The P25 Net box should update without PTT or a page refresh. With `P25Gateway` installed, each change should also announce the complete phrase “Linked to #####” automatically, without PTT. Confirm the log and dashboard as well as the voice prompt.
+
+### Verify the installed P25Gateway voice fix
+
+```bash
+echo "=== VERSION ==="; /opt/P25Gateway/P25Gateway -v; echo "=== CHECKSUM AND FILE ==="; sha256sum /opt/P25Gateway/P25Gateway; file /opt/P25Gateway/P25Gateway; stat -c 'Size: %s bytes; Mode: %a; Owner: %U:%G' /opt/P25Gateway/P25Gateway; echo "=== SERVICE ==="; systemctl is-active p25gateway.service; echo "=== PERSISTENCE ==="; sudo grep -nE '^[[:space:]]*(Static|RFHangTime|NetHangTime)[[:space:]]*=' /opt/P25Gateway/P25Gateway.ini
+```
+
+Required patched version and checksum:
+
+```text
+P25Gateway version 20201105-p25voice2
+512c84ac62405f7b6e641c2c03b0b0a549d98ce4ce40896a089658505d497388
+```
 
 ### Verify RX Monitor packet timing
 
@@ -647,7 +790,7 @@ The RX Monitor investigation also confirmed that these did not require modificat
 
 ## 🧩 Separate Companion Projects
 
-These projects were developed and tested alongside the core fixes but are intentionally not bundled into the six-file repair set:
+These projects were developed and tested alongside the core fixes but are intentionally not bundled into the seven-file installed repair set:
 
 * DVSwitch Dashboard responsive-layout improvements
 * DVSwitch Dashboard Auto / Light / Dark Mode overlay
@@ -658,10 +801,10 @@ Keeping visual overlays separate prevents restore operations from accidentally o
 
 ## 🔁 Rollback
 
-Restore the six files from the dated backup directory created earlier, then restart the affected services. Replace `BACKUP_DIRECTORY` with the actual backup path:
+Restore the seven installed files from the dated backup directory created earlier, then restart the affected services. Replace `BACKUP_DIRECTORY` with the actual backup path:
 
 ```bash
-sudo cp -a BACKUP_DIRECTORY/opt/MMDVM_Bridge/dvswitch.sh BACKUP_DIRECTORY/opt/MMDVM_Bridge/MMDVM_Bridge /opt/MMDVM_Bridge/ && sudo cp -a BACKUP_DIRECTORY/opt/YSFGateway/YSFGateway.ini /opt/YSFGateway/ && sudo cp -a BACKUP_DIRECTORY/opt/P25Gateway/P25Gateway.ini /opt/P25Gateway/ && sudo cp -a BACKUP_DIRECTORY/usr/share/dvswitch/include/functions.php BACKUP_DIRECTORY/usr/share/dvswitch/include/status.php /usr/share/dvswitch/include/ && sudo systemctl restart mmdvm_bridge.service ysfgateway.service p25gateway.service
+sudo cp -a BACKUP_DIRECTORY/opt/MMDVM_Bridge/dvswitch.sh BACKUP_DIRECTORY/opt/MMDVM_Bridge/MMDVM_Bridge /opt/MMDVM_Bridge/ && sudo cp -a BACKUP_DIRECTORY/opt/YSFGateway/YSFGateway.ini /opt/YSFGateway/ && sudo cp -a BACKUP_DIRECTORY/opt/P25Gateway/P25Gateway BACKUP_DIRECTORY/opt/P25Gateway/P25Gateway.ini /opt/P25Gateway/ && sudo cp -a BACKUP_DIRECTORY/usr/share/dvswitch/include/functions.php BACKUP_DIRECTORY/usr/share/dvswitch/include/status.php /usr/share/dvswitch/include/ && sudo chmod 755 /opt/MMDVM_Bridge/dvswitch.sh /opt/MMDVM_Bridge/MMDVM_Bridge /opt/P25Gateway/P25Gateway && sudo systemctl restart mmdvm_bridge.service ysfgateway.service p25gateway.service
 ```
 
 ---
