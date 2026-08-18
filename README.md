@@ -48,8 +48,8 @@ Common symptoms:
 
 ```text
 DVSwitch YSF 5 digit reflector not working
-YSFGateway 44444 becomes 4444
-YSFGateway 53594 becomes 3594
+ex. YSFGateway 44444 becomes 4444
+ex. YSFGateway 53594 becomes 3594
 Trying to find non existent YSF reflector with an id of 4444
 Invalid YSF reflector id/name - "4444"
 DVSwitch YSF PTT but no audio
@@ -146,7 +146,7 @@ No changes to `Analog_Bridge.ini`, `proxy.js`, or `pcm-player.min.js` were requi
 `dvswitch.sh` confirmed version:
 
 ```text
-1.6.3-12
+1.6.4
 ```
 
 The script replaces unreliable or outdated database downloads with validated sources for the supported network data. It checks downloaded content before replacing the working file and preserves the existing database when a download is empty, invalid, HTML, or otherwise unusable.
@@ -281,6 +281,8 @@ backup_dir="/root/dvswitch-fix-backup-$(date +%Y%m%d-%H%M%S)"; sudo mkdir -p "$b
 ---
 
 ## 📥 Installation
+
+You can follow the following instructions, but if you know what you're doing, I suggest manually backing up each file and then replacing it with the patched file - Don't forget to make sure the replacement file has the same permissons as the original file. After replacing the files I suggest a reboot.
 
 Clone the repository and enter its directory:
 
