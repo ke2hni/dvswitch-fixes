@@ -48,8 +48,8 @@ Common symptoms:
 
 ```text
 DVSwitch YSF 5 digit reflector not working
-YSFGateway 44444 becomes 4444
-YSFGateway 53594 becomes 3594
+ex. YSFGateway 44444 becomes 4444
+ex. YSFGateway 53594 becomes 3594
 Trying to find non existent YSF reflector with an id of 4444
 Invalid YSF reflector id/name - "4444"
 DVSwitch YSF PTT but no audio
