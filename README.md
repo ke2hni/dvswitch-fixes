@@ -282,6 +282,8 @@ backup_dir="/root/dvswitch-fix-backup-$(date +%Y%m%d-%H%M%S)"; sudo mkdir -p "$b
 
 ## 📥 Installation
 
+You can follow the following instructions, but if you know what you're doing, I suggest manually backing up each file and then replacing it with the patched file - Don't forget to make sure the replacement file has the same permissons as the original file. After replacing the files I suggest a reboot.
+
 Clone the repository and enter its directory:
 
 ```bash
