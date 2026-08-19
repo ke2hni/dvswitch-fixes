@@ -510,6 +510,8 @@ backup_dir="/root/dvswitch-fix-backup-$(date +%Y%m%d-%H%M%S)"; sudo mkdir -p "$b
 
 ## 📥 Installation
 
+While you can follow the standard instructions provided, advanced users may prefer to manually back up each original file before replacing it with the patched version. If you are replacing any .ini configuration files, ensure you reinsert your personal information and custom settings back into the new files. Please verify that all replacement files retain the exact same access permissions as the originals. Once the files are successfully replaced, a system reboot is recommended to apply the changes.
+
 Back up every original before replacement. Preserve the node-specific values in both `.ini` files, and keep each replacement's required ownership and permissions. Install and test one component at a time.
 
 Clone the repository and enter its directory:
