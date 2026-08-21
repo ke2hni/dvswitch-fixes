@@ -320,6 +320,8 @@ Live verification on node68425:
 
 Two additional architecture-specific binaries are included for users experiencing the same YSF reflector-number truncation problem on 32-bit ARM or 64-bit x86 systems:
 
+Two additional architecture-specific binaries are included for users experiencing the same P25 remote-command parsing issue on 32-bit ARM or 64-bit x86 systems.
+
 | Repository file | Architecture | `dpkg --print-architecture` | Test status |
 | --- | --- | --- | --- |
 | `MMDVM_Bridge.armhf.ysf5-fixed` | ARMHF / 32-bit ARM | `armhf` | **Not live-tested** |
@@ -353,6 +355,12 @@ MMDVM_Bridge.armhf.ysf5-fixed
 
 MMDVM_Bridge.amd64.ysf5-fixed
 f4a0e49fef216227449a31d2860bdf3234c68b5685ed51e4f4993eefe6659bbf
+
+MMDVM_Bridge.amd64.ysf5-p25-fixed
+amd64: 4d2f6e099e7c519e0861076fe2a6a774a763832913d4a122ef0b9435b6bc4051
+
+MMDVM_Bridge.armhf.ysf5-p25-fixed
+armhf: d7ad0240e989670e373d844aae70a83bbd7782c2128a45b43ece11f07357555a
 ```
 
 #### Install the optional ARMHF binary
