@@ -316,21 +316,19 @@ Live verification on node68425:
 > [!WARNING]
 > This replacement is intentionally restricted to the exact original build tested above. A matching `-v` output alone is not enough: package rebuilds can share the same internal version while containing different downstream code. If the original SHA-256 or size does not match, do not install this binary.
 
-### 2B. Optional ARMHF and AMD64 YSF five-digit compatibility binaries
+### 2B. Optional ARMHF and AMD64 combined YSF/P25 compatibility binaries
 
-Two additional architecture-specific binaries are included for users experiencing the same YSF reflector-number truncation problem on 32-bit ARM or 64-bit x86 systems:
-
-Two additional architecture-specific binaries are included for users experiencing the same P25 remote-command parsing issue on 32-bit ARM or 64-bit x86 systems.
+Two additional architecture-specific binaries are included for users experiencing the same YSF reflector-number truncation or P25 remote-command parsing problems on 32-bit ARM or 64-bit x86 systems.
 
 | Repository file | Architecture | `dpkg --print-architecture` | Test status |
 | --- | --- | --- | --- |
-| `MMDVM_Bridge.armhf.ysf5-fixed` | ARMHF / 32-bit ARM | `armhf` | **Not live-tested** |
-| `MMDVM_Bridge.amd64.ysf5-fixed` | AMD64 / x86-64 | `amd64` | **Not live-tested** |
+| `MMDVM_Bridge.armhf.ysf5-p25-fixed` | ARMHF / 32-bit ARM | `armhf` | **Not live-tested** |
+| `MMDVM_Bridge.amd64.ysf5-p25-fixed` | AMD64 / x86-64 | `amd64` | **Not live-tested** |
 
 > [!WARNING]
-> These two optional binaries passed structural and checksum validation, but they have not yet been tested on live ARMHF or AMD64 DVSwitch nodes. The original five-digit formatting defect should be corrected, but users must treat these as experimental until successful reflector switching and audio are confirmed on each architecture.
+> These two optional binaries passed structural, embedded-string, architecture, size, and checksum validation, but they have not yet been tested on live ARMHF or AMD64 DVSwitch nodes. Both command-formatting defects should be corrected, but users must treat these binaries as experimental until successful YSF and P25 reflector switching and audio are confirmed on each architecture.
 
-Unlike the source-rebuilt ARM64 binary, these two binaries use a safe, same-size, one-byte compatibility patch:
+The YSF repair uses a same-size, one-byte compatibility patch:
 
 ```text
 Original embedded format: REMOTE@%s:%d!Link%c%c%c%05d
@@ -345,22 +343,23 @@ Requested 53594 → transmitted LinkYSF053594 → parsed as 53594
 Requested 02034 → transmitted LinkYSF002034 → parsed as 02034
 ```
 
-Only one byte differs between each patched binary and its corresponding original. File size and ELF offsets remain unchanged.
+The additional P25 repair changes the remote-command format from:
+
+```text
+Original embedded format: REMOTE@%s:%d!TalkGroup%d
+Patched embedded format:  REMOTE@%s:%d!TalkGroup %d
+```
+
+Because the corrected P25 string is one byte longer, its binary implementation is architecture-specific. The ARMHF build uses existing padding following the original string. The AMD64 build stores the corrected string in existing read-only padding and retargets both command references to it. The overall file sizes remain unchanged.
 
 Confirmed SHA-256 checksums:
 
 ```text
-MMDVM_Bridge.armhf.ysf5-fixed
-2846551df5a4e6c47626451e3c30a276baba6882412e9d8ee228eef00599aef7
-
-MMDVM_Bridge.amd64.ysf5-fixed
-f4a0e49fef216227449a31d2860bdf3234c68b5685ed51e4f4993eefe6659bbf
-
 MMDVM_Bridge.amd64.ysf5-p25-fixed
-amd64: 4d2f6e099e7c519e0861076fe2a6a774a763832913d4a122ef0b9435b6bc4051
+4d2f6e099e7c519e0861076fe2a6a774a763832913d4a122ef0b9435b6bc4051
 
 MMDVM_Bridge.armhf.ysf5-p25-fixed
-armhf: d7ad0240e989670e373d844aae70a83bbd7782c2128a45b43ece11f07357555a
+d7ad0240e989670e373d844aae70a83bbd7782c2128a45b43ece11f07357555a
 ```
 
 #### Install the optional ARMHF binary
@@ -368,7 +367,7 @@ armhf: d7ad0240e989670e373d844aae70a83bbd7782c2128a45b43ece11f07357555a
 This command checks for the Debian `armhf` architecture, verifies the checksum, creates a backup, stops the service, installs the file under its required runtime name `MMDVM_Bridge`, applies executable permissions, and restarts the service:
 
 ```bash
-test "$(dpkg --print-architecture)" = "armhf" && echo "Architecture OK: armhf" || { echo "ERROR: This binary requires Debian ARMHF"; exit 1; }; echo '2846551df5a4e6c47626451e3c30a276baba6882412e9d8ee228eef00599aef7  MMDVM_Bridge.armhf.ysf5-fixed' | sha256sum -c - && sudo cp -a /opt/MMDVM_Bridge/MMDVM_Bridge "/opt/MMDVM_Bridge/MMDVM_Bridge.before-ysf5-armhf-fix-$(date +%Y%m%d-%H%M%S)" && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge.armhf.ysf5-fixed /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
+test "$(dpkg --print-architecture)" = "armhf" && echo "Architecture OK: armhf" || { echo "ERROR: This binary requires Debian ARMHF"; exit 1; }; echo 'd7ad0240e989670e373d844aae70a83bbd7782c2128a45b43ece11f07357555a  MMDVM_Bridge.armhf.ysf5-p25-fixed' | sha256sum -c - && sudo cp -a /opt/MMDVM_Bridge/MMDVM_Bridge "/opt/MMDVM_Bridge/MMDVM_Bridge.before-ysf5-p25-armhf-fix-$(date +%Y%m%d-%H%M%S)" && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge.armhf.ysf5-p25-fixed /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
 ```
 
 #### Install the optional AMD64 binary
@@ -376,7 +375,7 @@ test "$(dpkg --print-architecture)" = "armhf" && echo "Architecture OK: armhf" |
 This command checks for the Debian `amd64` architecture, verifies the checksum, creates a backup, stops the service, installs the file under its required runtime name `MMDVM_Bridge`, applies executable permissions, and restarts the service:
 
 ```bash
-test "$(dpkg --print-architecture)" = "amd64" && echo "Architecture OK: amd64" || { echo "ERROR: This binary requires Debian AMD64"; exit 1; }; echo 'f4a0e49fef216227449a31d2860bdf3234c68b5685ed51e4f4993eefe6659bbf  MMDVM_Bridge.amd64.ysf5-fixed' | sha256sum -c - && sudo cp -a /opt/MMDVM_Bridge/MMDVM_Bridge "/opt/MMDVM_Bridge/MMDVM_Bridge.before-ysf5-amd64-fix-$(date +%Y%m%d-%H%M%S)" && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge.amd64.ysf5-fixed /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
+test "$(dpkg --print-architecture)" = "amd64" && echo "Architecture OK: amd64" || { echo "ERROR: This binary requires Debian AMD64"; exit 1; }; echo '4d2f6e099e7c519e0861076fe2a6a774a763832913d4a122ef0b9435b6bc4051  MMDVM_Bridge.amd64.ysf5-p25-fixed' | sha256sum -c - && sudo cp -a /opt/MMDVM_Bridge/MMDVM_Bridge "/opt/MMDVM_Bridge/MMDVM_Bridge.before-ysf5-p25-amd64-fix-$(date +%Y%m%d-%H%M%S)" && sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 MMDVM_Bridge.amd64.ysf5-p25-fixed /opt/MMDVM_Bridge/MMDVM_Bridge && sudo systemctl start mmdvm_bridge.service && systemctl --no-pager --full status mmdvm_bridge.service
 ```
 
 The downloaded architecture suffix is only used to identify the correct file. The installed executable **must** be named exactly:
@@ -385,7 +384,7 @@ The downloaded architecture suffix is only used to identify the correct file. Th
 /opt/MMDVM_Bridge/MMDVM_Bridge
 ```
 
-Linux filenames are case-sensitive. Do not leave the installed file named `MMDVM_Bridge.armhf.ysf5-fixed` or `MMDVM_Bridge.amd64.ysf5-fixed`. The `install -m 755` commands above perform the rename and set the required executable permissions automatically.
+Linux filenames are case-sensitive. Do not leave the installed file named `MMDVM_Bridge.armhf.ysf5-p25-fixed` or `MMDVM_Bridge.amd64.ysf5-p25-fixed`. The `install -m 755` commands above perform the rename and set the required executable permissions automatically.
 
 After installation, confirm the filename, ownership, permissions, architecture, version, and service state:
 
@@ -393,20 +392,20 @@ After installation, confirm the filename, ownership, permissions, architecture, 
 sudo ls -l /opt/MMDVM_Bridge/MMDVM_Bridge; file /opt/MMDVM_Bridge/MMDVM_Bridge; /opt/MMDVM_Bridge/MMDVM_Bridge -v; systemctl is-active mmdvm_bridge.service
 ```
 
-Confirm that the compatibility format is present and the broken format is absent:
+Confirm that both corrected formats are present and that the broken P25 format is absent:
 
 ```bash
-echo "=== FIXED FORMAT ==="; strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!Link%c%c%c%06d' || echo "Fixed format not found"; echo "=== BROKEN FORMAT ==="; strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!Link%c%c%c%05d' || echo "Broken format not present"
+echo "=== YSF FIX ==="; strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!Link%c%c%c%06d' || echo "ERROR: corrected YSF format not found"; echo "=== P25 FIX ==="; strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!TalkGroup %d' || echo "ERROR: corrected P25 format not found"; echo "=== BROKEN P25 FORMAT ==="; strings -a /opt/MMDVM_Bridge/MMDVM_Bridge | grep -F 'REMOTE@%s:%d!TalkGroup%d' && echo "ERROR: broken P25 format remains" || echo "Broken P25 format not present"
 ```
 
-Then tune a known five-digit YSF reflector and verify that the YSFGateway log uses all five digits and that audio works. Do not publish either optional binary as confirmed working until it passes a live test on its intended architecture.
+Then test known five-digit YSF and P25 reflectors and verify that both gateway logs use all five digits, both reflectors link without PTT, and audio works. Do not publish either optional binary as confirmed working until it passes both live tests on its intended architecture.
 
 #### Roll back an optional binary
 
 Locate the dated backup created by the installation command:
 
 ```bash
-sudo ls -1t /opt/MMDVM_Bridge/MMDVM_Bridge.before-ysf5-*-fix-* | head
+sudo ls -1t /opt/MMDVM_Bridge/MMDVM_Bridge.before-ysf5-p25-*-fix-* | head
 ```
 
 Replace `BACKUP_FILE` with the complete backup path shown above:
@@ -420,16 +419,18 @@ sudo systemctl stop mmdvm_bridge.service && sudo install -m 755 BACKUP_FILE /opt
 Upload the original binary, the architecture-matched patched binary, and the relevant terminal output. Do not upload passwords, API keys, or unredacted private credentials. You can use this prompt:
 
 ```text
-I am testing an experimental MMDVM_Bridge YSF five-digit reflector fix.
+I am testing an experimental MMDVM_Bridge combined YSF and P25 remote-command fix.
 
 Hardware/architecture: [paste uname -m and dpkg --print-architecture]
 Operating system: [paste cat /etc/os-release]
 MMDVM_Bridge version: [paste /opt/MMDVM_Bridge/MMDVM_Bridge -v]
 YSFGateway version: [paste /opt/YSFGateway/YSFGateway -v]
+P25Gateway version: [paste /opt/P25Gateway/P25Gateway -v]
 Patched file used: [ARMHF or AMD64 filename]
-Reflector number tested: [five-digit number]
+YSF reflector number tested: [five-digit number]
+P25 reflector number tested: [five-digit number]
 
-Please compare the attached original and patched binaries. Confirm their architectures, sizes, SHA-256 checksums, executable formats, and embedded YSF command strings. Verify that only the intended formatter changed from %05d to %06d. Then review the attached systemctl status and YSFGateway log output to determine whether all five digits were parsed and whether the reflector linked successfully. Do not suggest unrelated configuration changes or overwrite any files. Give all Linux terminal commands as single-line copy/paste commands and include a rollback command before recommending a replacement.
+Please compare the attached original and patched binaries. Confirm their architectures, sizes, SHA-256 checksums, executable formats, and embedded YSF and P25 command strings. Verify the YSF change from %05d to %06d and the P25 change from TalkGroup%d to TalkGroup %d. Then review the attached systemctl status and YSFGateway and P25Gateway log output to determine whether all five digits were parsed, whether both reflectors linked without PTT, and whether audio worked. Do not suggest unrelated configuration changes or overwrite any files. Give all Linux terminal commands as single-line copy/paste commands and include a rollback command before recommending a replacement.
 ```
 
 ### 3. P25Gateway configuration cleanup
@@ -474,7 +475,7 @@ It also ensures `Switched` messages reach the P25 dashboard parser. This allows 
 
 ### 6. YSF and D-Star dashboard display repairs
 
-`status.php` provides three visible corrections:
+`status.php` provides four visible corrections:
 
 * Prevents the YSF Network box from displaying `null`.
 * Uses case-insensitive YSF host-file matching.
@@ -496,7 +497,7 @@ DVSwitch packages from the Bookworm hamradio repository
 Stock DVSwitch Dashboard
 ```
 
-Individual PHP and shell-script changes may also be applicable to Debian 12 Bookworm and other architectures. The confirmed `MMDVM_Bridge` binary is strictly ARM64; separate experimental ARMHF and AMD64 compatibility binaries are included but remain live-test pending.
+Individual PHP and shell-script changes may also be applicable to Debian 12 Bookworm and other architectures. The confirmed `MMDVM_Bridge` binary is strictly ARM64; separate experimental ARMHF and AMD64 combined YSF/P25 compatibility binaries are included but remain live-test pending.
 
 Before installing, record your versions:
 
@@ -525,11 +526,8 @@ Back up every original before replacement. Preserve the node-specific values in 
 Clone the repository and enter its directory:
 
 ```bash
-git clone https://github.com/ke2hni/DVSwitch-Fixes.git && cd DVSwitch-Fixes
+git clone https://github.com/ke2hni/dvswitch-fixes.git && cd dvswitch-fixes
 ```
-
-> [!NOTE]
-> Change the repository URL above if this project is published under a different repository name.
 
 ### Install `dvswitch.sh`
 
@@ -686,7 +684,7 @@ systemctl is-active mmdvm_bridge.service ysfgateway.service p25gateway.service a
 Tune a known five-digit reflector and inspect the current YSFGateway log:
 
 ```bash
-sudo /opt/MMDVM_Bridge/dvswitch.sh tune 44444; sleep 3; sudo tail -n 40 "$(ls -1t /var/log/mmdvm/YSFGateway-*.log | head -n 1)"
+sudo /opt/MMDVM_Bridge/dvswitch.sh mode ysf; sleep 2; sudo /opt/MMDVM_Bridge/dvswitch.sh tune 44444; sleep 3; sudo tail -n 40 "$(ls -1t /var/log/mmdvm/YSFGateway-*.log | head -n 1)"
 ```
 
 The log should show a valid link attempt for all five digits, not a truncated four-digit number.
